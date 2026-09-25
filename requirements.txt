@@ -1,0 +1,8 @@
+streamlit
+google-genai
+replicate
+edge-tts
+moviepy
+pydantic
+requests
+nest_asyncio
