@@ -1,3 +1,9 @@
+st.markdown("""
+    <style>
+    html { direction: rtl; }
+    </style>
+""", unsafe_allow_html=True)
+
 import os
 import time
 import requests
