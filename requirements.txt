@@ -2,7 +2,7 @@ streamlit
 google-genai
 replicate
 edge-tts
-moviepy
+moviepy==1.0.3
 pydantic
 requests
 nest_asyncio
