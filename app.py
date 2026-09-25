@@ -1,27 +1,35 @@
+import streamlit as st
+import os
+import time
+import requests
+import asyncio
+import nest_asyncio
+from pydantic import BaseModel
+from google import genai
+from google.genai import types
+import replicate
+import edge_tts
+
+try:
+    from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+except ImportError:
+    from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips
+
+nest_asyncio.apply()
+
+# الآن يمكنك استدعاء دالة st بعد استيرادها بنجاح
 st.markdown("""
     <style>
     html { direction: rtl; }
     </style>
 """, unsafe_allow_html=True)
 
-import os
-import time
-import requests
-import asyncio
-import nest_asyncio
-import streamlit as st
-from pydantic import BaseModel
-from google import genai
-from google.genai import types
-import replicate
-import edge_tts
-try:
-    from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
-except ImportError:
-    from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips
+st.set_page_config(
+    page_title="AI Cinema Studio",
+    page_icon="🎬",
+    layout="centered"
+)
 
-
-nest_asyncio.apply()
 
 # ------------------------------------------------------------------------------
 # إعدادات مظهر الواجهة (UI Layout)
