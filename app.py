@@ -65,16 +65,31 @@ def generate_full_production(story: str, client: genai.Client) -> CinemaProject:
     القصة المدخلة:
     {story}
     """
-    res = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=CinemaProject,
-            temperature=0.6
-        ),
-    )
-    return CinemaProject.model_validate_json(res.text)
+    
+    # قائمة النماذج لتجربتها بالترتيب في حال ضغط السيرفر
+    candidate_models = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
+    
+    last_error = None
+    for target_model in candidate_models:
+        for attempt in range(3):  # 3 محاولات لكل نموذج
+            try:
+                res = client.models.generate_content(
+                    model=target_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=CinemaProject,
+                        temperature=0.6
+                    ),
+                )
+                return CinemaProject.model_validate_json(res.text)
+            except Exception as e:
+                last_error = e
+                time.sleep(2)  # انتظار ثانيتين قبل إعادة المحاولة
+                continue
+                
+    raise last_error
+
 
 def generate_voiceover(text: str, filename: str, voice_name: str):
     async def _runner():
