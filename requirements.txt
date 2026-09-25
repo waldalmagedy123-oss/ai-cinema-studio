@@ -1,8 +1,8 @@
-streamlit==1.38.0
+streamlit
 google-genai
 replicate
 edge-tts
-moviepy==1.0.3
+moviepy
 pydantic
 requests
 nest_asyncio
