@@ -10,9 +10,9 @@ import replicate
 import edge_tts
 
 try:
-    from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeAudioClip
+    from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
 except ImportError:
-    from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeAudioClip
+    from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips
 
 st.set_page_config(
     page_title="AI Cinema Studio Pro Max",
@@ -39,14 +39,22 @@ def ask_gemini(instruction: str, context: str, gemini_key: str) -> str:
                 return f"خطأ: {e}"
 
 def generate_image(prompt: str, token: str) -> str:
-    """توليد صورة فوتوغرافية ومفهوم بصري عبر Flux Schnell"""
-    os.environ["REPLICATE_API_TOKEN"] = token
-    output = replicate.run(
+    """توليد صورة فوتوغرافية ومفهوم بصري عبر Flux Schnell مع دعم FileOutput"""
+    client = replicate.Client(api_token=token)
+    output = client.run(
         "black-forest-labs/flux-schnell",
-        input={"prompt": prompt, "aspect_ratio": "16:9"}
+        input={
+            "prompt": prompt,
+            "aspect_ratio": "16:9",
+            "output_format": "webp",
+            "output_quality": 80
+        }
     )
     if isinstance(output, list) and len(output) > 0:
-        return str(output[0])
+        item = output[0]
+        return str(item.url if hasattr(item, "url") else item)
+    elif hasattr(output, "url"):
+        return str(output.url)
     return str(output)
 
 def generate_voiceover(text: str, filename: str, voice_name: str):
@@ -56,18 +64,19 @@ def generate_voiceover(text: str, filename: str, voice_name: str):
     asyncio.run(_runner())
 
 def generate_video(prompt: str, filename: str, token: str):
-    os.environ["REPLICATE_API_TOKEN"] = token
-    output = replicate.run(
+    client = replicate.Client(api_token=token)
+    output = client.run(
         "minimax/video-01",
         input={"prompt": prompt, "prompt_optimizer": True}
     )
-    r = requests.get(str(output))
+    video_url = str(output.url if hasattr(output, "url") else output)
+    r = requests.get(video_url)
     with open(filename, "wb") as f:
         f.write(r.content)
 
-# ----------------- تهيئة ذاكرة الجلسة التفاعلية ونظام الرصيد -----------------
+# ----------------- تهيئة ذاكرة الجلسة ونظام الرصيد -----------------
 if "credits" not in st.session_state:
-    st.session_state.credits = 220000  # رصيد الاستوديو الافتراضي
+    st.session_state.credits = 220000
 
 if "project_title" not in st.session_state:
     st.session_state.project_title = "التحول من ضعيف إلى قاتل الشياطين"
@@ -80,7 +89,7 @@ if "characters" not in st.session_state:
         {
             "name": "ريان",
             "role": "قاتل الشياطين",
-            "visual": "شاب في أوائل العشرينيات، شعر أسود مموج، عينان عنبريتان، يحمل سيفاً فولاذياً أسود محفوراً بلهب أحمر متوهج، جروح تدريب على ذراعيه، درع كتف خفيف.",
+            "visual": "شاب في أوائل العشرينيات، شعر أسود مموج، عينان عنبريتان، سيف فولاذي أسود بنار قرمزية، ندوب تدريب على ذراعيه.",
             "image_url": ""
         }
     ]
@@ -88,8 +97,8 @@ if "characters" not in st.session_state:
 if "locations" not in st.session_state:
     st.session_state.locations = [
         {
-            "name": "القرية المحترقة",
-            "setting": "أطلال قرية جبلية منكوبة تغطيها طبقات من الرماد ودخان النيران البرتقالية المشتعلة، ليل بارد مظلم.",
+            "name": "أطلال القرية",
+            "setting": "قرية جبلية منكوبة تغطيها طبقات من الرماد ودخان النيران البرتقالية المشتعلة، ليل بارد ومظلم.",
             "image_url": ""
         }
     ]
@@ -113,11 +122,9 @@ if "crew" not in st.session_state:
 if "gear" not in st.session_state:
     st.session_state.gear = "كاميرا سينمائية عريضة، عدسات أنامورفيك، مثبت حركة Ronin."
 
-# ----------------- الشريط الجانبي للإعدادات والرصيد -----------------
+# ----------------- الشريط الجانبي للإعدادات -----------------
 with st.sidebar:
     st.title("⚙️ استوديو الإنتاج السينمائي")
-    
-    # عداد الرصيد التجاري
     st.metric(label="💎 رصيد الاستوديو المتبقي:", value=f"{st.session_state.credits:,} نقطة")
     
     gemini_key = st.text_input("Gemini API Key:", type="password")
@@ -126,7 +133,6 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("💾 إدارة وحفظ المشروع")
     
-    # تصدير المشروع كـ JSON
     current_data = {
         "title": st.session_state.project_title,
         "treatment": st.session_state.treatment,
@@ -145,7 +151,6 @@ with st.sidebar:
         use_container_width=True
     )
     
-    # استرجاع المشروع المرفوع
     uploaded_file = st.file_uploader("📂 استيراد مشروع سابق:", type=["json"])
     if uploaded_file is not None:
         try:
@@ -175,7 +180,6 @@ with col_ai_title:
             st.session_state.credits -= 50
             st.rerun()
 
-# التبويبات الأربعة الموسعة
 tab1, tab2, tab3, tab4 = st.tabs([
     "✍️ كتابة وتطوير", 
     "🌍 العالم والأصول (Concept Art)", 
@@ -196,7 +200,7 @@ with tab1:
         if st.button("🪄 مساعدة AI: توليد معالجة متكاملة"):
             if gemini_key:
                 with st.spinner("جاري صياغة القصة..."):
-                    st.session_state.treatment = ask_gemini("قم بصياغة معالجة درامية سينمائية قوية تشمل البداية، نقطة التحول، والذروة.", st.session_state.project_title, gemini_key)
+                    st.session_state.treatment = ask_gemini("قم بصياغة معالجة درامية سينمائية قوية تشمل البداية، نقطة التحول، والذروة لقصة تحول شخص ضعيف إلى قاتل شياطين.", st.session_state.project_title, gemini_key)
                     st.session_state.credits -= 150
                     st.rerun()
     with col_w2:
@@ -226,7 +230,13 @@ with tab2:
                 if st.button(f"🎨 توليد صورة المظهر (Concept Art) #{i+1}", key=f"btn_img_c_{i}"):
                     if replicate_token:
                         with st.spinner("جاري إنشاء صورة الشخصية عبر Flux..."):
-                            prompt_img = f"Cinematic concept art portrait, {ch['visual']}, 8k, detailed character design, dramatic film lighting"
+                            eng_prompt = ask_gemini(
+                                "Translate and convert this character description into a detailed English prompt for an AI image generator (photorealistic, 8k, cinematic lighting):",
+                                ch["visual"],
+                                gemini_key
+                            ) if gemini_key else ch["visual"]
+                            
+                            prompt_img = f"Cinematic concept art portrait, {eng_prompt}, detailed character design, dramatic film lighting, 8k"
                             ch["image_url"] = generate_image(prompt_img, replicate_token)
                             st.session_state.credits -= 500
                             st.rerun()
@@ -259,7 +269,13 @@ with tab2:
                 if st.button(f"🎨 توليد صورة البيئة (Set Concept) #{j+1}", key=f"btn_img_l_{j}"):
                     if replicate_token:
                         with st.spinner("جاري إنشاء بيئة الموقع..."):
-                            prompt_loc = f"Cinematic wide establishing shot of {loc['setting']}, 8k, photorealistic environment, masterpiece lighting"
+                            eng_loc_prompt = ask_gemini(
+                                "Translate and convert this location description into a detailed English prompt for an AI image generator (wide cinematic shot, photorealistic, 8k):",
+                                loc["setting"],
+                                gemini_key
+                            ) if gemini_key else loc["setting"]
+                            
+                            prompt_loc = f"Cinematic wide establishing shot of {eng_loc_prompt}, photorealistic environment, masterpiece lighting, 8k"
                             loc["image_url"] = generate_image(prompt_loc, replicate_token)
                             st.session_state.credits -= 500
                             st.rerun()
@@ -309,8 +325,8 @@ with tab3:
             st.session_state.scenes.pop()
             st.rerun()
 
-    st.markdown("### 🚀 استوديو الإنتاج الصوتي والتصيير النهائي")
-    if st.button("🎥 بدء إنتاج الفيلم المدمج (فيديو + تعليق + مؤثرات)", type="primary", use_container_width=True):
+    st.markdown("### 🚀 استوديو التصيير النهائي (Render Studio)")
+    if st.button("🎥 بدء إنتاج الفيلم المدمج (فيديو + تعليق صوتي)", type="primary", use_container_width=True):
         if not replicate_token:
             st.error("⚠️ يرجى إدخال Replicate API Token في الشريط الجانبي.")
         else:
@@ -329,7 +345,7 @@ with tab3:
                     v_clip = VideoFileClip(v_file)
                     a_clip = AudioFileClip(a_file)
                     
-                    # التوافق الكامل مع إصدارات MoviePy الحديثة
+                    # ضبط المدة والصوت بالتوافق مع MoviePy 1.x و 2.x
                     if hasattr(v_clip, "with_duration"):
                         v_clip = v_clip.with_duration(a_clip.duration).with_audio(a_clip)
                     else:
@@ -361,6 +377,39 @@ with tab4:
     
     col_ai_doc, col_down_doc = st.columns(2)
     with col_ai_doc:
+        if st.button("🪄 مساعدة AI: توليد خطة العمل الميدانية"):
+            if gemini_key:
+                with st.spinner("جاري صياغة مستندات الإنتاج..."):
+                    st.session_state.lighting = ask_gemini("اقترح توزيع إضاءة سينمائي لهذا العمل.", st.session_state.treatment, gemini_key)
+                    st.session_state.crew = ask_gemini("اقترح قائمة الطاقم السينمائي المطلوب.", st.session_state.treatment, gemini_key)
+                    st.session_state.gear = ask_gemini("اقترح أفضل الكاميرات والعدسات المناسبة لهذا الطابع.", st.session_state.treatment, gemini_key)
+                    st.session_state.credits -= 100
+                    st.rerun()
+    with col_down_doc:
+        call_sheet_content = f"""
+=====================================================
+مستند الإنتاج السينمائي الرسمي (CINEMA PRODUCTION SHEET)
+=====================================================
+عنوان العمل: {st.session_state.project_title}
+المعالجة الدرامية:
+{st.session_state.treatment}
+
+-----------------------------------------------------
+1. مخطط الإضاءة وتوزيع الكشافات:
+{st.session_state.lighting}
+
+2. طاقم العمل وتوزيع المهام:
+{st.session_state.crew}
+
+3. المعدات والكاميرات المطلوبة:
+{st.session_state.gear}
+=====================================================
+تم التوليد عبر استوديو AI Cinema Pro
+        """
+        st.download_button(
+            "📄 تنزيل كشف الإنتاج الرسمي (Call Sheet)",
+            data=call_sheet_content,
+            file_name="Call_Sheet_Production.txt"l_ai_doc:
         if st.button("🪄 مساعدة AI: توليد خطة العمل الميدانية"):
             if gemini_key:
                 with st.spinner("جاري صياغة مستندات الإنتاج..."):
