@@ -66,29 +66,29 @@ def generate_full_production(story: str, client: genai.Client) -> CinemaProject:
     {story}
     """
     
-    # قائمة النماذج لتجربتها بالترتيب في حال ضغط السيرفر
-    candidate_models = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
+    # الاعتماد الحصري على النموذج المعتمد
+    target_model = "gemini-3.8-flash"
     
-    last_error = None
-    for target_model in candidate_models:
-        for attempt in range(3):  # 3 محاولات لكل نموذج
-            try:
-                res = client.models.generate_content(
-                    model=target_model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=CinemaProject,
-                        temperature=0.6
-                    ),
-                )
-                return CinemaProject.model_validate_json(res.text)
-            except Exception as e:
-                last_error = e
-                time.sleep(2)  # انتظار ثانيتين قبل إعادة المحاولة
-                continue
-                
-    raise last_error
+    # محاولة الإرسال حتى 4 مرات في حال واجه السيرفر ضغطاً مؤقتاً (503)
+    max_retries = 4
+    for attempt in range(max_retries):
+        try:
+            res = client.models.generate_content(
+                model=target_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=CinemaProject,
+                    temperature=0.6
+                ),
+            )
+            return CinemaProject.model_validate_json(res.text)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(3 * (attempt + 1))  # انتظار 3 ثوانٍ ثم 6 ثم 9 لتجاوز ذروة الضغط
+            else:
+                raise e
+
 
 
 def generate_voiceover(text: str, filename: str, voice_name: str):
