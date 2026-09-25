@@ -14,55 +14,67 @@ try:
 except ImportError:
     from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips
 
+# ضبط واجهة الصفحة بنمط سينمائي عريض
 st.set_page_config(
-    page_title="AI Cinema Studio",
+    page_title="AI Cinema Studio Pro",
     page_icon="🎬",
-    layout="centered"
+    layout="wide"
 )
 
-st.title("🎬 أستوديو الأفلام السينمائية بالذكاء الاصطناعي")
-st.markdown("حوّل أفكارك وقصصك المكتوبة إلى أفلام وثائقية وسينمائية متحركة بالكامل.")
+# ----------------- نماذج البيانات المهيكلة (Pydantic Models) -----------------
+class Character(BaseModel):
+    name: str
+    role: str
+    visual_description: str
 
-with st.sidebar:
-    st.header("⚙️ إعدادات الحساب والتشغيل")
-    gemini_key = st.text_input("Gemini API Key:", type="password")
-    replicate_token = st.text_input("Replicate API Token:", type="password")
-    voice_type = st.selectbox(
-        "نبرة صوت الراوي:",
-        ["ar-SA-HamedNeural", "ar-SA-ShakirNeural", "ar-EG-ShakirNeural"]
-    )
-    st.markdown("---")
-    st.caption("🔒 يتم استخدام المفاتيح لمعالجة طلبك فقط.")
+class Location(BaseModel):
+    name: str
+    visual_setting: str
 
-class Scene(BaseModel):
+class SceneDetail(BaseModel):
     scene_number: int
-    video_prompt: str
-    narration_text: str
+    location: str
+    time_of_day: str
+    camera_movement: str
+    visual_prompt: str
+    narration_or_dialogue: str
 
-class MovieScript(BaseModel):
-    title: str
-    scenes: list[Scene]
+class ProductionDoc(BaseModel):
+    lighting_setup: str
+    crew_list: list[str]
+    equipment_needed: list[str]
 
-def generate_script(story: str, client: genai.Client) -> MovieScript:
+class CinemaProject(BaseModel):
+    movie_title: str
+    treatment: str
+    characters: list[Character]
+    locations: list[Location]
+    storyboard: list[SceneDetail]
+    production_doc: ProductionDoc
+
+# ----------------- دوال الاتصال بالذكاء الاصطناعي -----------------
+def generate_full_production(story: str, client: genai.Client) -> CinemaProject:
     prompt = f"""
-    حول القصة إلى سيناريو فيلم سينمائي من مشهدين متحركين فقط.
-    لكل مشهد:
-    1. نص الراوي بالعربية الفصحى في narration_text.
-    2. وصف فيديو متحرك عالي التفاصيل بالإنجليزية في video_prompt.
+    أنت منتج تنفيذي وكاتب سينمائي عالمي. قم بتحويل الفكرة/القصة التالية إلى مشروع إنتاج سينمائي متكامل وعميق:
+    1. Treatment: معالجة درامية تسرد ملخص العمل ورؤيته الإخراجية.
+    2. Characters: تفاصيل الشخصيات الرئيسية والمظهر البصري الدقيق.
+    3. Locations: مواقع التصوير وتفاصيل البيئة والإضاءة.
+    4. Storyboard: تفصيل 3 لقطات سينمائية أساسية (مع زاوية الكاميرا ونوع الحركة، موجه فيديو مفصل بالإنجليزية، ونصوص الحوار أو الراوي بالعربية).
+    5. ProductionDoc: مقترحات الإضاءة، قائمة الطاقم الأساسي، والمعدات المطلوبة.
 
-    القصة:
+    القصة المدخلة:
     {story}
     """
     res = client.models.generate_content(
-        model="gemini-3.5-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
-            response_schema=MovieScript,
-            temperature=0.5
+            response_schema=CinemaProject,
+            temperature=0.6
         ),
     )
-    return MovieScript.model_validate_json(res.text)
+    return CinemaProject.model_validate_json(res.text)
 
 def generate_voiceover(text: str, filename: str, voice_name: str):
     async def _runner():
@@ -80,64 +92,171 @@ def generate_video(prompt: str, filename: str, token: str):
     with open(filename, "wb") as f:
         f.write(r.content)
 
-story_text = st.text_area(
-    "اكتب قصتك هنا بالتفصيل:",
-    placeholder="في ليلة عاصفة فوق قمة جبلية منعزلة...",
-    height=160
+# ----------------- الشريط الجانبي للإعدادات ومفاتيح الـ API -----------------
+with st.sidebar:
+    st.image("https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80", use_container_width=True)
+    st.title("⚙️ استوديو الإنتاج")
+    gemini_key = st.text_input("Gemini API Key:", type="password")
+    replicate_token = st.text_input("Replicate API Token:", type="password")
+    voice_type = st.selectbox(
+        "🎙️ نبرة صوت التعليق / الراوي:",
+        ["ar-SA-HamedNeural", "ar-SA-ShakirNeural", "ar-EG-ShakirNeural"]
+    )
+    st.markdown("---")
+    st.caption("✨ نظام إدارة الاستوديوهات السينمائية المستقلة (Virtual Production)")
+
+# تهيئة مساحة التخزين في الجلسة (Session State)
+if "project_data" not in st.session_state:
+    st.session_state.project_data = None
+
+st.title("🎬 أستوديو صناعة الأفلام السينمائية بالذكاء الاصطناعي")
+st.markdown("منظومة إنتاج متكاملة لتوليد المعالجات الدرامية، وتصميم الشخصيات، ولوحات القصة، وإنتاج الفيديو بالكامل.")
+
+# واجهة إدخال الفكرة الرئيسية
+story_input = st.text_area(
+    "💡 اكتب الفكرة أو القصة أو ملخص المشروع السينمائي:",
+    placeholder="اكتب هنا الفكرة بتفاصيلها: الصراع الرئيسي، الأجواء العامة، الحقبة الزمنية...",
+    height=120
 )
 
-if st.button("🚀 بدء إنتاج الفيلم الآن", type="primary", use_container_width=True):
-    if not gemini_key or not replicate_token:
-        st.error("⚠️ يرجى إدخال مفاتيح الـ API في القائمة الجانبية أولاً.")
-    elif not story_text.strip():
-        st.warning("⚠️ يرجى كتابة نص القصة قبل بدء الإنتاج.")
+col_run, col_clear = st.columns([4, 1])
+with col_run:
+    if st.button("⚡ بناء وتطوير المشروع السينمائي بالكامل", type="primary", use_container_width=True):
+        if not gemini_key:
+            st.error("⚠️ يرجى إدخال مفتاح Gemini API في الشريط الجانبي أولاً.")
+        elif not story_input.strip():
+            st.warning("⚠️ يرجى كتابة نص الفكرة أولاً.")
+        else:
+            with st.spinner("🧠 جاري تحضير المعالجة الدرامية، وتصميم الأصول واللوحات عبر الذكاء الاصطناعي..."):
+                try:
+                    client = genai.Client(api_key=gemini_key)
+                    st.session_state.project_data = generate_full_production(story_input, client)
+                    st.success(f"🎬 تم إعداد المشروع بنجاح: «{st.session_state.project_data.movie_title}»")
+                except Exception as e:
+                    st.error(f"حدث خطأ أثناء التطوير: {e}")
+
+with col_clear:
+    if st.button("🗑️ مسح المشروع", use_container_width=True):
+        st.session_state.project_data = None
+        st.rerun()
+
+st.markdown("---")
+
+# ----------------- عرض أقسام الإنتاج عبر التبويبات (Tabs) -----------------
+tab1, tab2, tab3, tab4 = st.tabs([
+    "✍️ كتابة وتطوير (Writing)", 
+    "🌍 العالم والأصول (Assets)", 
+    "🎥 لوح وإنتاج (Storyboard & Production)", 
+    "📋 إعداد الأوراق (Call Sheets & Crew)"
+])
+
+# 1. تبويب الكتابة والتطوير
+with tab1:
+    if st.session_state.project_data:
+        data = st.session_state.project_data
+        st.header(f"🎞️ {data.movie_title}")
+        st.subheader("📜 المعالجة الدرامية (Treatment):")
+        st.info(data.treatment)
     else:
-        status = st.status("🎬 جاري العمل على إنتاج الفيلم...", expanded=True)
-        progress_bar = st.progress(0)
+        st.write("📌 أدخل الفكرة واضغط زر التطوير في الأعلى لظهور المعالجة الدرامية.")
+
+# 2. تبويب العالم والأصول
+with tab2:
+    if st.session_state.project_data:
+        data = st.session_state.project_data
+        col_chars, col_locs = st.columns(2)
         
-        try:
-            status.write("🧠 صياغة السيناريو عبر Gemini...")
-            client = genai.Client(api_key=gemini_key)
-            script = generate_script(story_text, client)
-            st.success(f"تم اعتماد الفيلم: «{script.title}»")
-            progress_bar.progress(20)
+        with col_chars:
+            st.subheader("👤 الشخصيات (Characters & Roles):")
+            for ch in data.characters:
+                with st.expander(f"🎭 {ch.name} - ({ch.role})", expanded=True):
+                    st.write(f"**الوصف البصري والملامح:** {ch.visual_description}")
+        
+        with col_locs:
+            st.subheader("📍 مواقع التصوير (Locations & Sets):")
+            for loc in data.locations:
+                with st.expander(f"🏛️ {loc.name}", expanded=True):
+                    st.write(f"**أجواء البيئة:** {loc.visual_setting}")
+    else:
+        st.write("📌 سيتم بناء بطاقات الممثلين وتفاصيل الديكور هنا فور توليد المشروع.")
 
-            clips = []
-            total_scenes = len(script.scenes)
-            for i, scene in enumerate(script.scenes):
-                idx = scene.scene_number
-                status.write(f"🎥 جاري إنتاج المشهد ({idx}/{total_scenes})...")
+# 3. تبويب لوح القصة والتنفيذ البصري
+with tab3:
+    if st.session_state.project_data:
+        data = st.session_state.project_data
+        st.subheader("🎬 لوحة القصة وقائمة اللقطات (Storyboard & Shot List)")
+        
+        for sc in data.storyboard:
+            with st.container():
+                st.markdown(f"#### 📍 مشهد {sc.scene_number}: في {sc.location} ({sc.time_of_day})")
+                col_info, col_prompt = st.columns([1, 1])
+                with col_info:
+                    st.markdown(f"**🎥 حركة الكاميرا:** `{sc.camera_movement}`")
+                    st.markdown(f"**🗣️ الحوار / نص الراوي:**")
+                    st.info(sc.narration_or_dialogue)
+                with col_prompt:
+                    st.markdown("**🪄 موجه توليد الفيديو (Prompt Engine):**")
+                    st.code(sc.visual_prompt, language="text")
+                st.markdown("---")
+        
+        st.subheader("🚀 الإنتاج السينمائي والتحريك الفعلي")
+        if st.button("🎥 بدء تصيير ودمج الفيلم النهائي عبر Replicate", type="primary"):
+            if not replicate_token:
+                st.error("⚠️ يرجى إدخال Replicate API Token في الشريط الجانبي.")
+            else:
+                prod_status = st.status("🎬 جاري العمل على التوليد والتحريك...", expanded=True)
+                clips = []
+                total = len(data.storyboard)
                 
-                v_file = f"temp_video_{idx}.mp4"
-                a_file = f"temp_audio_{idx}.mp3"
-                
-                generate_voiceover(scene.narration_text, a_file, voice_type)
-                generate_video(scene.video_prompt, v_file, replicate_token)
-                
-                v_clip = VideoFileClip(v_file)
-                a_clip = AudioFileClip(a_file)
-                v_clip = v_clip.set_duration(a_clip.duration).set_audio(a_clip)
-                clips.append(v_clip)
-                
-                progress_bar.progress(20 + int(60 * ((i + 1) / total_scenes)))
+                try:
+                    for i, sc in enumerate(data.storyboard):
+                        idx = sc.scene_number
+                        prod_status.write(f"🎞️ توليد المشهد ({idx}/{total})...")
+                        v_file = f"scene_{idx}.mp4"
+                        a_file = f"audio_{idx}.mp3"
+                        
+                        generate_voiceover(sc.narration_or_dialogue, a_file, voice_type)
+                        generate_video(sc.visual_prompt, v_file, replicate_token)
+                        
+                        v_clip = VideoFileClip(v_file)
+                        a_clip = AudioFileClip(a_file)
+                        v_clip = v_clip.set_duration(a_clip.duration).set_audio(a_clip)
+                        clips.append(v_clip)
+                    
+                    prod_status.write("⚡ دمج المشاهد والمونتاج الصوتي...")
+                    final_film = "final_movie.mp4"
+                    final = concatenate_videoclips(clips, method="compose")
+                    final.write_videofile(final_film, fps=24, codec="libx264", audio_codec="aac")
+                    prod_status.update(label="✅ اكتمل الفيلم بنجاح!", state="complete")
+                    
+                    st.video(final_film)
+                    with open(final_film, "rb") as f:
+                        st.download_button("📥 تحميل الفيلم بالكامل (MP4)", f, file_name=final_film, mime="video/mp4")
+                except Exception as ex:
+                    prod_status.update(label="❌ حدث خطأ أثناء التصيير", state="error")
+                    st.error(f"تفاصيل الخطأ: {ex}")
+    else:
+        st.write("📌 لوحة القصة وأزرار تحريك الفيديو ستظهر هنا فور إعداد المشروع.")
 
-            status.write("🎞️ دمج المقطع النهائي...")
-            final_output = "generated_cinema.mp4"
-            final = concatenate_videoclips(clips, method="compose")
-            final.write_videofile(final_output, fps=24, codec="libx264", audio_codec="aac")
-            progress_bar.progress(100)
-            status.update(label="✅ اكتمل إنتاج الفيلم بنجاح!", state="complete")
-
-            st.video(final_output)
-            with open(final_output, "rb") as file:
-                st.download_button(
-                    label="📥 تنزيل الفيلم",
-                    data=file,
-                    file_name=final_output,
-                    mime="video/mp4",
-                    use_container_width=True
-                )
-
-        except Exception as e:
-            status.update(label="❌ حدث خطأ أثناء الإنتاج", state="error")
-            st.error(f"تفاصيل الخطأ: {e}")
+# 4. تبويب إعداد الأوراق وتجهيزات الإنتاج
+with tab4:
+    if st.session_state.project_data:
+        doc = st.session_state.project_data.production_doc
+        st.subheader("📋 كشف التجهيزات الميدانية والتقنية")
+        
+        col_light, col_crew, col_gear = st.columns(3)
+        with col_light:
+            st.markdown("#### ⚡ مخطط الإضاءة المقترح")
+            st.write(doc.lighting_setup)
+            
+        with col_crew:
+            st.markdown("#### 👥 قائمة الطاقم المطلوب")
+            for member in doc.crew_list:
+                st.write(f"- {member}")
+                
+        with col_gear:
+            st.markdown("#### 🎥 قائمة المعدات والكاميرات")
+            for gear in doc.equipment_needed:
+                st.write(f"- {gear}")
+    else:
+        st.write("📌 تفاصيل الطاقم ومخططات الإضاءة ستظهر تلقائياً هنا مع كل فيلم.")
