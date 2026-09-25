@@ -9,7 +9,11 @@ from google import genai
 from google.genai import types
 import replicate
 import edge_tts
-from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+try:
+    from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+except ImportError:
+    from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips
+
 
 nest_asyncio.apply()
 
