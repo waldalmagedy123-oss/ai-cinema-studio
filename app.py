@@ -1,9 +1,9 @@
-import streamlit as st
 import os
 import time
 import requests
 import asyncio
 import nest_asyncio
+import streamlit as st
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
@@ -17,23 +17,7 @@ except ImportError:
 
 nest_asyncio.apply()
 
-# الآن يمكنك استدعاء دالة st بعد استيرادها بنجاح
-st.markdown("""
-    <style>
-    html { direction: rtl; }
-    </style>
-""", unsafe_allow_html=True)
-
-st.set_page_config(
-    page_title="AI Cinema Studio",
-    page_icon="🎬",
-    layout="centered"
-)
-
-
-# ------------------------------------------------------------------------------
-# إعدادات مظهر الواجهة (UI Layout)
-# ------------------------------------------------------------------------------
+# يجب أن يكون هذا الأمر هو أول أمر مرئي لـ Streamlit
 st.set_page_config(
     page_title="AI Cinema Studio",
     page_icon="🎬",
@@ -43,7 +27,7 @@ st.set_page_config(
 st.title("🎬 أستوديو الأفلام السينمائية بالذكاء الاصطناعي")
 st.markdown("حوّل أفكارك وقصصك المكتوبة إلى أفلام وثائقية وسينمائية متحركة بالكامل بضغطة زر واحدة.")
 
-# الشريط الجانبي للإعدادات ومفاتيح المستخدم (Bring Your Own Key أو مفاتيح الأدمن)
+# الشريط الجانبي للإعدادات
 with st.sidebar:
     st.header("⚙️ إعدادات الحساب والتشغيل")
     gemini_key = st.text_input("Gemini API Key:", type="password")
@@ -53,11 +37,9 @@ with st.sidebar:
         ["ar-SA-HamedNeural", "ar-SA-ShakirNeural", "ar-EG-ShakirNeural"]
     )
     st.markdown("---")
-    st.caption("🔒 يتم استخدام المفاتيح لمعالجة طلبك فقط دون تخزينها.")
+    st.caption("🔒 يتم استخدام المفاتيح لمعالجة طلبك فقط.")
 
-# ------------------------------------------------------------------------------
-# نماذج وهيكلة البيانات
-# ------------------------------------------------------------------------------
+# نماذج البيانات
 class Scene(BaseModel):
     scene_number: int
     video_prompt: str
@@ -67,15 +49,12 @@ class MovieScript(BaseModel):
     title: str
     scenes: list[Scene]
 
-# ------------------------------------------------------------------------------
-# الدوال البرمجية الأساسية
-# ------------------------------------------------------------------------------
 def generate_script(story: str, client: genai.Client) -> MovieScript:
     prompt = f"""
     حول القصة إلى سيناريو فيلم سينمائي من مشهدين متحركين فقط.
     لكل مشهد:
     1. نص الراوي بالعربية الفصحى في narration_text.
-    2. وصف فيديو متحرك عالي التفاصيل بالإنجليزية في video_prompt (حدد حركة الكاميرا، العناصر، والإضاءة بدقة).
+    2. وصف فيديو متحرك عالي التفاصيل بالإنجليزية في video_prompt.
 
     القصة:
     {story}
@@ -109,9 +88,7 @@ def generate_video(prompt: str, filename: str, token: str):
     with open(filename, "wb") as f:
         f.write(r.content)
 
-# ------------------------------------------------------------------------------
-# واجهة إدخال القصة وزر التشغيل
-# ------------------------------------------------------------------------------
+# واجهة القصة
 story_text = st.text_area(
     "اكتب قصتك هنا بالتفصيل:",
     placeholder="في ليلة عاصفة فوق قمة جبلية منعزلة...",
@@ -119,7 +96,6 @@ story_text = st.text_area(
 )
 
 if st.button("🚀 بدء إنتاج الفيلم الآن", type="primary", use_container_width=True):
-    # التحقق من المدخلات
     if not gemini_key or not replicate_token:
         st.error("⚠️ يرجى إدخال مفاتيح الـ API في القائمة الجانبية أولاً.")
     elif not story_text.strip():
@@ -129,19 +105,17 @@ if st.button("🚀 بدء إنتاج الفيلم الآن", type="primary", use
         progress_bar = st.progress(0)
         
         try:
-            # 1. صياغة السيناريو
-            status.write("🧠 صياغة السيناريو وتقسيم المشاهد عبر Gemini...")
+            status.write("🧠 صياغة السيناريو عبر Gemini...")
             client = genai.Client(api_key=gemini_key)
             script = generate_script(story_text, client)
             st.success(f"تم اعتماد الفيلم: «{script.title}»")
             progress_bar.progress(20)
 
-            # 2. توليد المشاهد
             clips = []
             total_scenes = len(script.scenes)
             for i, scene in enumerate(script.scenes):
                 idx = scene.scene_number
-                status.write(f"🎥 جاري إنتاج لقطات الفيديو والصوت للمشهد ({idx}/{total_scenes})...")
+                status.write(f"🎥 جاري إنتاج المشهد ({idx}/{total_scenes})...")
                 
                 v_file = f"temp_video_{idx}.mp4"
                 a_file = f"temp_audio_{idx}.mp3"
@@ -156,19 +130,17 @@ if st.button("🚀 بدء إنتاج الفيلم الآن", type="primary", use
                 
                 progress_bar.progress(20 + int(60 * ((i + 1) / total_scenes)))
 
-            # 3. المونتاج النهائي
-            status.write("🎞️ جاري معالجة ودمج المقطع النهائي...")
+            status.write("🎞️ دمج المقطع النهائي...")
             final_output = "generated_cinema.mp4"
             final = concatenate_videoclips(clips, method="compose")
             final.write_videofile(final_output, fps=24, codec="libx264", audio_codec="aac")
             progress_bar.progress(100)
             status.update(label="✅ اكتمل إنتاج الفيلم بنجاح!", state="complete")
 
-            # 4. عرض الفيديو وتوفير زر التنزيل
             st.video(final_output)
             with open(final_output, "rb") as file:
                 st.download_button(
-                    label="📥 تنزيل الفيلم بجودة عالية",
+                    label="📥 تنزيل الفيلم",
                     data=file,
                     file_name=final_output,
                     mime="video/mp4",
@@ -178,4 +150,3 @@ if st.button("🚀 بدء إنتاج الفيلم الآن", type="primary", use
         except Exception as e:
             status.update(label="❌ حدث خطأ أثناء الإنتاج", state="error")
             st.error(f"تفاصيل الخطأ: {e}")
-            
