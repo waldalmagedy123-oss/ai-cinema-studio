@@ -2,7 +2,6 @@ import os
 import time
 import requests
 import asyncio
-import nest_asyncio
 import streamlit as st
 from pydantic import BaseModel
 from google import genai
@@ -15,9 +14,6 @@ try:
 except ImportError:
     from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips
 
-nest_asyncio.apply()
-
-# يجب أن يكون هذا الأمر هو أول أمر مرئي لـ Streamlit
 st.set_page_config(
     page_title="AI Cinema Studio",
     page_icon="🎬",
@@ -25,9 +21,8 @@ st.set_page_config(
 )
 
 st.title("🎬 أستوديو الأفلام السينمائية بالذكاء الاصطناعي")
-st.markdown("حوّل أفكارك وقصصك المكتوبة إلى أفلام وثائقية وسينمائية متحركة بالكامل بضغطة زر واحدة.")
+st.markdown("حوّل أفكارك وقصصك المكتوبة إلى أفلام وثائقية وسينمائية متحركة بالكامل.")
 
-# الشريط الجانبي للإعدادات
 with st.sidebar:
     st.header("⚙️ إعدادات الحساب والتشغيل")
     gemini_key = st.text_input("Gemini API Key:", type="password")
@@ -39,7 +34,6 @@ with st.sidebar:
     st.markdown("---")
     st.caption("🔒 يتم استخدام المفاتيح لمعالجة طلبك فقط.")
 
-# نماذج البيانات
 class Scene(BaseModel):
     scene_number: int
     video_prompt: str
@@ -70,13 +64,11 @@ def generate_script(story: str, client: genai.Client) -> MovieScript:
     )
     return MovieScript.model_validate_json(res.text)
 
-async def _async_voice(text: str, filename: str, voice_name: str):
-    comm = edge_tts.Communicate(text, voice=voice_name)
-    await comm.save(filename)
-
 def generate_voiceover(text: str, filename: str, voice_name: str):
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(_async_voice(text, filename, voice_name))
+    async def _runner():
+        comm = edge_tts.Communicate(text, voice=voice_name)
+        await comm.save(filename)
+    asyncio.run(_runner())
 
 def generate_video(prompt: str, filename: str, token: str):
     os.environ["REPLICATE_API_TOKEN"] = token
@@ -88,7 +80,6 @@ def generate_video(prompt: str, filename: str, token: str):
     with open(filename, "wb") as f:
         f.write(r.content)
 
-# واجهة القصة
 story_text = st.text_area(
     "اكتب قصتك هنا بالتفصيل:",
     placeholder="في ليلة عاصفة فوق قمة جبلية منعزلة...",
